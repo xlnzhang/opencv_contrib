@@ -97,7 +97,7 @@ ERStat::ERStat(int init_level, int init_pixel, int init_x, int init_y) : pixel(i
     central_moments[0] = 0.0;
     central_moments[1] = 0.0;
     central_moments[2] = 0.0;
-    crossings = new deque<int>();
+    crossings = makePtr<deque<int> >();
     crossings->push_back(0);
 }
 
@@ -526,9 +526,7 @@ void ERFilterNM::er_tree_extract( InputArray image )
                 ERStat *stat = er_stack.at(r);
                 if (stat->crossings)
                 {
-                    stat->crossings->clear();
-                    delete(stat->crossings);
-                    stat->crossings = NULL;
+                    stat->crossings.release();
                 }
                 deleteERStatTree(stat);
             }
@@ -665,9 +663,7 @@ void ERFilterNM::er_merge(ERStat *parent, ERStat *child)
     child->med_crossings = (float)m_crossings.at(1);
 
     // free unnecessary mem
-    child->crossings->clear();
-    delete(child->crossings);
-    child->crossings = NULL;
+    child->crossings.release();
 
     // recover the original grey-level
     child->level = child->level*thresholdDelta;
@@ -714,9 +710,7 @@ void ERFilterNM::er_merge(ERStat *parent, ERStat *child)
         // free mem
         if(child->crossings)
         {
-            child->crossings->clear();
-            delete(child->crossings);
-            child->crossings = NULL;
+            child->crossings.release();
         }
         delete(child);
     }
@@ -811,7 +805,7 @@ ERStat* ERFilterNM::er_tree_filter ( InputArray image, ERStat * stat, ERStat *pa
     vector<vector<Point> > contours;
     vector<Point> contour_poly;
     vector<Vec4i> hierarchy;
-    findContours( region, contours, hierarchy, RETR_TREE, CHAIN_APPROX_NONE, Point(0, 0) );
+    findContours( region(Rect(1, 1, region.cols - 2, region.rows - 2)), contours, hierarchy, RETR_TREE, CHAIN_APPROX_NONE, Point(1, 1) );
     //TODO check epsilon parameter of approxPolyDP (set empirically) : we want more precission
     //     if the region is very small because otherwise we'll loose all the convexities
     approxPolyDP( Mat(contours[0]), contour_poly, (float)min(rect.width,rect.height)/17, true );
@@ -2820,12 +2814,12 @@ bool guo_hall_thinning(const Mat1b & img, Mat& skeleton)
             p8 = (skeleton.data[row     * skeleton.cols + col-1]) > 0;
             p9 = (skeleton.data[(row-1) * skeleton.cols + col-1]) > 0;
 
-            int C  = (!p2 & (p3 | p4)) + (!p4 & (p5 | p6)) +
-                    (!p6 & (p7 | p8)) + (!p8 & (p9 | p2));
-            int N1 = (p9 | p2) + (p3 | p4) + (p5 | p6) + (p7 | p8);
-            int N2 = (p2 | p3) + (p4 | p5) + (p6 | p7) + (p8 | p9);
+            int C  = (!p2 && (p3 || p4)) + (!p4 && (p5 || p6)) +
+                    (!p6 && (p7 || p8)) + (!p8 && (p9 || p2));
+            int N1 = (p9 || p2) + (p3 || p4) + (p5 || p6) + (p7 || p8);
+            int N2 = (p2 || p3) + (p4 || p5) + (p6 || p7) + (p8 || p9);
             int N  = N1 < N2 ? N1 : N2;
-            int m  = iter == 0 ? ((p6 | p7 | !p9) & p8) : ((p2 | p3 | !p5) & p4);
+            int m  = iter == 0 ? ((p6 || p7 || !p9) && p8) : ((p2 || p3 || !p5) && p4);
 
             if ((C == 1) && (N >= 2) && (N <= 3) && (m == 0))
             {
